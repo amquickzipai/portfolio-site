@@ -318,29 +318,43 @@ export default function PortfolioPage() {
         const allTickers = [...new Set([...holdingTickers, ...watchlistTickers])];
         const allPrices: PriceMap = {};
 
-        // Fetch prices using our API route (server-side Yahoo fetch)
-        const batchSize = 30;
+        // Fetch prices directly from Twelve Data API (free, CORS enabled)
+        const batchSize = 8; // Twelve Data allows up to 8 symbols per request on free tier
         for (let i = 0; i < allTickers.length; i += batchSize) {
           const batch = allTickers.slice(i, i + batchSize);
           try {
-            const response = await fetch(`/api/prices?symbols=${batch.join(',')}`);
+            const response = await fetch(
+              `https://api.twelvedata.com/quote?symbol=${batch.join(',')}&apikey=demo`
+            );
             if (response.ok) {
               const data = await response.json();
-              for (const [symbol, priceData] of Object.entries(data)) {
-                const pd = priceData as StockPrice;
-                const jan2026Price = JAN_2026_PRICES[symbol] || pd.price;
-                const ytdChangePercent = jan2026Price > 0 ? ((pd.price - jan2026Price) / jan2026Price) * 100 : 0;
-                allPrices[symbol] = {
-                  ...pd,
-                  ytdPrice: jan2026Price,
-                  ytdChange: pd.price - jan2026Price,
-                  ytdChangePercent: ytdChangePercent,
-                };
+              // Handle single vs multiple symbols response format
+              const quotes = Array.isArray(data) ? data : [data];
+              for (const quote of quotes) {
+                if (quote.symbol && quote.close) {
+                  const currentPrice = parseFloat(quote.close);
+                  const prevClose = parseFloat(quote.previous_close) || currentPrice;
+                  const change = parseFloat(quote.change) || 0;
+                  const changePercent = parseFloat(quote.percent_change) || 0;
+                  const jan2026Price = JAN_2026_PRICES[quote.symbol] || currentPrice;
+                  const ytdChangePercent = jan2026Price > 0 ? ((currentPrice - jan2026Price) / jan2026Price) * 100 : 0;
+
+                  allPrices[quote.symbol] = {
+                    price: currentPrice,
+                    change: change,
+                    changePercent: changePercent,
+                    ytdPrice: jan2026Price,
+                    ytdChange: currentPrice - jan2026Price,
+                    ytdChangePercent: ytdChangePercent,
+                  };
+                }
               }
             }
           } catch (e) {
             console.error('API fetch error:', e);
           }
+          // Small delay to avoid rate limiting
+          await new Promise(r => setTimeout(r, 250));
         }
         setPrices(allPrices);
         setLastUpdated(new Date());
