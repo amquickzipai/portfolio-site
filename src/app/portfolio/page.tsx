@@ -318,42 +318,30 @@ export default function PortfolioPage() {
         const allTickers = [...new Set([...holdingTickers, ...watchlistTickers])];
         const allPrices: PriceMap = {};
 
-        // Fetch in batches using CORS proxy to Yahoo Finance
-        const batchSize = 20;
+        // Fetch prices using our API route (server-side Yahoo fetch)
+        const batchSize = 30;
         for (let i = 0; i < allTickers.length; i += batchSize) {
           const batch = allTickers.slice(i, i + batchSize);
-          const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${batch.join(',')}`;
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
-
           try {
-            const response = await fetch(proxyUrl);
+            const response = await fetch(`/api/prices?symbols=${batch.join(',')}`);
             if (response.ok) {
               const data = await response.json();
-              if (data.quoteResponse?.result) {
-                for (const quote of data.quoteResponse.result) {
-                  const currentPrice = quote.regularMarketPrice || 0;
-                  const jan2026Price = JAN_2026_PRICES[quote.symbol] || currentPrice;
-                  const ytdChange = currentPrice - jan2026Price;
-                  const ytdChangePercent = jan2026Price > 0 ? ((currentPrice - jan2026Price) / jan2026Price) * 100 : 0;
-
-                  allPrices[quote.symbol] = {
-                    price: currentPrice,
-                    change: quote.regularMarketChange || 0,
-                    changePercent: quote.regularMarketChangePercent || 0,
-                    ytdPrice: jan2026Price,
-                    ytdChange: ytdChange,
-                    ytdChangePercent: ytdChangePercent,
-                  };
-                }
+              for (const [symbol, priceData] of Object.entries(data)) {
+                const pd = priceData as StockPrice;
+                const jan2026Price = JAN_2026_PRICES[symbol] || pd.price;
+                const ytdChangePercent = jan2026Price > 0 ? ((pd.price - jan2026Price) / jan2026Price) * 100 : 0;
+                allPrices[symbol] = {
+                  ...pd,
+                  ytdPrice: jan2026Price,
+                  ytdChange: pd.price - jan2026Price,
+                  ytdChangePercent: ytdChangePercent,
+                };
               }
             }
           } catch (e) {
-            console.error('Batch fetch error:', e);
+            console.error('API fetch error:', e);
           }
-          // Small delay between batches to avoid rate limiting
-          await new Promise(r => setTimeout(r, 100));
         }
-
         setPrices(allPrices);
         setLastUpdated(new Date());
       } catch (error) {
