@@ -278,6 +278,13 @@ export const themes: Theme[] = [
       { ticker: "LASR", name: "nLIGHT Inc", allocation: 0.14, shares: 12421, lastPrice: 38.37, costPrice: 18.04, theme: "Electronic Warfare" },
     ]
   },
+  {
+    name: "Standalone Positions",
+    allocation: 2.91,
+    holdings: [
+      { ticker: "TIC", name: "TIC Solutions Inc", allocation: 2.91, shares: 985510, lastPrice: 9.89, costPrice: 13.45, theme: "Standalone Positions" },
+    ]
+  },
 ];
 
 export const getAllHoldings = (): Holding[] => {
